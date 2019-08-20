@@ -1,0 +1,83 @@
+---
+- hosts: sit_servers
+  tasks:
+  - name: Update APT pakage manager
+    become_method: root
+    apt: update_cache=yes cache_valid_time=3600
+    ignore_errors: yes
+
+  - name: Upgrade all package
+    become_method: root
+    apt: upgrade=safe
+    ignore_errors: yes
+
+  - name: Install nginx
+    become_method: root
+    apt: name=nginx state=present package=1.14.2
+    ignore_errors: yes
+
+  - name: Add php 7 PPA repository
+    become_method: root
+    apt_repository: repo='ppa:ondrej/php'
+
+  - name: install PHP CLI
+    become_method: root
+    apt: name=php7.0-cli state=present
+
+  - name: install PHP packages
+    become_method: root
+    apt:
+      pkg:
+        - php7.0-fpm
+        - php7.0-dev
+        - php7.0-gd
+        - php7.0-curl
+        - php7.0-opcache
+        - php7.0-mbstring
+        - php7.0-xml
+        - php7.0-json
+        - php7.0-imap
+        - php7.0-mysql
+      state: present
+
+
+  - name: install mysql repo
+    become_method: root
+    apt_repository: repo='ppa:ondrej/mysql-5.6'
+
+  - name: Install MYSQL
+    become: yes
+    become_method: root
+    apt: name={{item}} state=present
+    with_items:
+      - mysql-server-5.6
+      - mysql-client-5.6
+    ignore_errors: yes
+
+    #  - name: Install Java
+    #become: yes
+    #become_method: sudo
+    #get_url=https://download.oracle.com/otn/java/jdk/8u202-b08/1961070e4c9b4e26a04e7f5a083f551e/jdk-8u202-linux-x64.tar.gz /opt/
+    #apt: name=java-1.8.0-openjdk-amd64 state=present
+  - name: add group "tomcat"
+    group: name=tomcat
+  - name: add user "tomcat"
+    user: name=tomcat group=tomcat home=/usr/share/tomcat createhome=no
+    become: True
+    become_method: sudo
+  - name: Create Directory
+    file:
+      path: /opt/mount_point/app
+      state: directory
+    become_method: sudo
+    ignore_errors: yes
+
+  - name: Download Tomcat
+    get_url: url=http://mirrors.estointernet.in/apache/tomcat/tomcat-8/v8.5.43/bin/apache-tomcat-8.5.43-windows-x64.zip dest=/opt/mount_point/app/
+  - name: install ZIP package
+    become_method: root
+    apt: name=zip state=present
+  - name: Extract the ZIP file
+    unarchive: src=/opt/mount_point/app/apache-tomcat-8.5.43-windows-x64.zip dest=/opt/mount_point/app/ remote_src=yes
+  - name: Rename the apache folder
+    command: mv /opt/mount_point/app/apache-tomcat-8.5.43 /opt/mount_point/app/tomcat
