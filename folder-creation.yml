@@ -1,0 +1,72 @@
+---
+- hosts: sit_servers
+  tasks:
+    - name: create /app & /data folder
+      become_method: root
+      file: path=/data state=directory
+      file: path=/app state=directory
+
+    - name: Create folder for encoresite
+      become_method: root
+      file: path=/opt/mount_point/encoresite state=directory
+
+    - name: Symlink for encoresitie
+      become_method: root
+      file: path=/opt/mount_point/encoresite src=/opt/mount_point/encoresite dest=/data/encoresite state=link force=yes
+
+    - name: create folder folder perdix
+      become_method: root
+      file: path=/opt/mount_point/data/perdix state=directory
+
+    - name: Symlink for perdix folder
+      become_method: root
+      file: path=/opt/mount_point/perdix src=/opt/mount_point/data/perdix dest=/data/perdix state=link force=yes
+
+    - name: create folder for db
+      become_method: root
+      file: path=/opt/mount_point/db state=directory
+
+    - name: Symlink for db folder
+      become_method: root
+      file: path=/opt/mount_point/db src=/opt/mount_point/db dest=/data/db state=link force=yes
+
+    - name: create folder for Nginx
+      become_method: root
+      file: path=/opt/mount_point/app/nginx state=directory
+
+    - name: Symlink for nginx code
+      become_method: root
+      file: path=/opt/mount_point/app src=/opt/mount_point/app/nginx dest=/app/nginx state=link force=yes
+
+    - name: Symlink for tomcat
+      become_method: root
+      file: path=/opt/mount_point/app/tomcat src=/opt/mount_point/app/tomcat dest=/app/tomcat state=link force=yes
+    
+    - name: Add user Jenkins
+      become_method: root
+      user:
+        name: jenkins
+        password: '$6$fkWtYvI41$HVYB6bQcQ5t0IqBeiJlNtZFxGbTw7mhdoLxymWSge5M8xKwIA6RxxpSwEJizAioYiO6/V3LFzkLKUCAix34Ck/'
+        groups:
+          - sudo
+        state: present
+        shell: /bin/bash
+        system: no
+        createhome: yes
+        append: yes
+        generate_ssh_key: yes
+        ssh_key_bits: 2048
+        ssh_key_file: .ssh/id_rsa
+    - name: Add group
+      become_method: root
+      group:
+        name: www-data
+        state: present
+
+    - name: Set User and Group permissions
+      become_method: root
+      file: dest={{item}} owner=jenkins group=www-data mode=u=rwX,g=rwX,o=rX  state=directory recurse=yes
+      with_items:
+        - /opt/mount_point/app/nginx/
+        - /opt/mount_point/app/tomcat/
+        - /opt/mount_point/data/perdix/
