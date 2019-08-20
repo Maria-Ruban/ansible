@@ -1,0 +1,69 @@
+---
+- name: Creating mysql DB dump and restore on another server (Remote-to-Remote).
+  hosts: "{{ source_server }}"
+  gather_facts: false
+  tasks: 
+  - name: split the db list 
+    set_fact:
+      databases_list: "{{ databases_list|default([]) + item.split(':') }}"
+    with_items:
+      - "{{ db_list.splitlines() }}"
+  - name: sepearate src and dest
+    set_fact:
+      dest: "{{ databases_list[1::2] }}"
+      src: "{{ databases_list[0::2] }}"
+  - name: create sqlDump folder
+    file:
+      path: /tmp/sqlDumpFolder
+      state: directory 
+  - name: backup given databases
+    mysql_db:
+      name: "{{ item }}"
+      state: dump
+      target: "/tmp/sqlDumpFolder/{{ item }}.sql"
+      login_host: localhost
+      login_user: root
+      login_password: "{{ source_db_password }}"
+    with_items: 
+      - "{{ src }}"
+  - name: Compress files to .tar.bz2 format
+    archive:
+      path:
+        - /tmp/sqlDumpFolder/*
+      dest: /tmp/sqlDumpFiles.tar.bz2
+      format: bz2
+      remote_src: yes
+  - name: Copy the DB dump file to remote server
+    synchronize: 
+     src: /tmp/sqlDumpFiles.tar.bz2
+     dest: /tmp/sqlDumpFiles.tar.bz2
+     mode: pull
+    delegate_to: "{{ destination_server }}"	
+    become: true
+  - name: Extract 
+    unarchive:
+      src: /tmp/sqlDumpFiles.tar.bz2
+      dest: /tmp/
+      remote_src: yes
+    delegate_to: "{{ destination_server }}"
+  - name: Restore DB dump files on remote server
+    mysql_db:
+      name: "{{ item.0 }}"
+      state: import
+      target: "/tmp/{{ item.1 }}.sql"
+      login_host: localhost
+      login_user: root
+      login_port: 3306
+      login_password: "{{ destination_db_password }}"
+    delegate_to: "{{ destination_server }}"
+    with_together: 
+      - "{{ dest }}"
+      - "{{ src }}"
+  - name: Clean the dump file on both servers
+    file:
+      state: absent
+      path: "/tmp/{{ item.1 }}.sql"
+    delegate_to: "{{ item.0 }}"
+    with_nested:
+      - ["{{ source_server }}","{{ destination_server }}"]
+      - "{{ src }}"
