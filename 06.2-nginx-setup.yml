@@ -1,0 +1,18 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_user: root
+  tasks:
+  - name: Update nginx sites-enabled folder
+    template: src=./templates/nginx/default dest=/etc/nginx/sites-enabled/default
+
+  - name: Update nginx configuration
+    template: src=./templates/nginx/nginx.conf dest=/etc/nginx/nginx.conf
+
+  - name: copy nginxconfig.io
+    copy: src=./templates/nginx/nginxconfig.io dest=/etc/nginx/
+
+  - name: Restart nginx
+    systemd:
+      state: restarted
+      name: nginx
