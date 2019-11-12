@@ -1,0 +1,114 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_user: root
+  tasks:
+
+  - name: check if nginx module is already available
+    stat: path=/usr/lib/nginx/modules/ngx_http_modsecurity_module.so
+    register: modsecNginxModuleExists
+
+  - name: check if mod security module is already availble
+    stat: path=/usr/local/modsecurity/lib/libmodsecurity.so
+    register: modSecAlreadyBuild
+
+  - name: check for existing modsecurity download
+    stat: path=/opt/ModSecurity
+    register: modSecurityExists
+
+  - name: check for existing owasp ruleset
+    stat: path=/etc/nginx/modsec
+    register: owaspRulesExist
+
+  - name: download modsecurity and do build
+    git:
+      repo: 'https://github.com/SpiderLabs/ModSecurity'
+      dest: '/opt/ModSecurity'
+      version: 'v3/master'
+    when: not modsecNginxModuleExists.stat.exists and not modSecAlreadyBuild.stat.exists and not modSecurityExists.stat.exists
+
+  - name: execute git submodule
+    shell: |
+      git submodule init
+      git submodule update
+      sh build.sh
+      ./configure
+      make
+      make install
+    args:
+      chdir: '/opt/ModSecurity'
+    when: not modsecNginxModuleExists.stat.exists and not modSecAlreadyBuild.stat.exists and not modSecAlreadyBuild.stat.exists
+
+  - name: check if modsecurity-nginx is already downloaded
+    stat: path=/opt/ModSecurity-nginx
+    register: modSecNginxAlreadyExists
+
+  - name: download modsecurity-nginx and do build
+    git:
+      repo: 'https://github.com/SpiderLabs/ModSecurity-nginx'
+      dest: '/opt/ModSecurity-nginx'
+    when: not modsecNginxModuleExists.stat.exists and not modSecNginxAlreadyExists.stat.exists
+
+  - name: unarchive nginx source
+    unarchive:
+      src: http://nginx.org/download/nginx-1.16.1.tar.gz
+      dest: /opt/
+      remote_src: yes
+    when: not modsecNginxModuleExists.stat.exists
+
+  - name: execute connector
+    shell: |
+      ./configure --with-compat --add-dynamic-module=/opt/ModSecurity-nginx
+      make modules
+    args:
+      chdir: '/opt/nginx-1.16.1'
+    when: not modsecNginxModuleExists.stat.exists
+
+  - name: move the module file to nginx modules
+    copy:
+      src: /opt/nginx-1.16.1/objs/ngx_http_modsecurity_module.so
+      dest: /usr/lib/nginx/modules
+    when: not modsecNginxModuleExists.stat.exists
+
+  - name: download owasp rules
+    git:
+      repo: 'https://github.com/SpiderLabs/owasp-modsecurity-crs'
+      dest: '/etc/nginx/modsec'
+    when: not owaspRulesExist.stat.exists
+
+  - name: using the modsec rules
+    command: cp /etc/nginx/modsec/owasp-modsecurity-crs/crs-setup.conf.example /etc/nginx/modsec/owasp-modsecurity-crs/crs-setup.conf
+
+  - name: copy recommended conf from main modsec repo
+    command: cp /opt/ModSecurity/modsecurity.conf-recommended /etc/nginx/modsec/modsecurity.conf
+
+  - name: copy unicode.mapping
+    command: cp /opt/ModSecurity/unicode.mapping /etc/nginx/modsec/unicode.mapping
+
+  - name: move main.conf
+    template: src=./templates/nginx/modsec/main.conf dest=/etc/nginx/modsec/main.conf
+
+  - name: change modsecurity log path
+    replace:
+      path: /etc/nginx/modsec/modsecurity.conf
+      regexp: /var/log/modsec_audit.log
+      replace: /var/log/nginx/modsec/modsec_audit.log
+
+  - name: enable modsecurity
+    replace:
+      path: /etc/nginx/modsec/modsecurity.conf
+      regexp: 'SecRuleEngine .*'
+      replace: 'SecRuleEngine On'
+
+  - name: create log directory for modsec
+    file:
+      path: /var/log/nginx/modsec
+      state: directory
+      owner: www-data
+      group: adm
+      mode: '0755'
+
+  - name: setup logrotation for modsecurity
+    template:
+      src: ./templates/nginx/modsec/modsec.logrotate.conf
+      dest: /etc/logrotate.d/modsecurity
