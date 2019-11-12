@@ -1,0 +1,28 @@
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_method: sudo
+  tasks: 
+    - name: set user and group ownership for jenkins deployments
+      file: dest={{item}} owner=jenkins group=www-data mode=u=rwX,g=rX,o=rX  state=directory recurse=yes
+      with_items:
+        - /app/nginx/
+        - /app/jenkins/
+        - /appdata/perdix/json
+        - /appdata/perdix/query
+
+    - name: Install pip
+      apt:
+        name: python-pip
+        update_cache: yes
+        state: present
+
+    - name: Install pip
+      apt:
+        name: libmysqlclient-dev
+        allow_unauthenticated: yes
+        update_cache: yes
+        state: present
+
+    - name: Install the Python MySQLB module
+      pip: name=MySQL-python
+  
