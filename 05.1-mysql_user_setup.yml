@@ -1,0 +1,127 @@
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_method: sudo
+  gather_facts: no
+  tasks:
+  - set_fact:
+      applicationPassword: "{{ lookup('password', '/dev/null length=20 chars=ascii_letters,digits') }}"
+  - set_fact:
+      rwUserPassword: "{{ lookup('password', '/dev/null length=20 chars=ascii_letters,digits') }}"
+
+  - name: check for credentials property file exists
+    stat: path=/database/mysqldata/.perdixcreds.properties
+    register: PropExists
+
+  - name: Removes anonymous user account for localhost
+    mysql_user:
+      name: ''
+      host: localhost
+      state: absent
+
+  - name: drop user jenkinsuser from all hosts - if exists
+    mysql_user:
+      name: jenkinsuser
+      state: absent
+      host_all: yes
+
+  - name: drop user financialForms from all hosts - if exists
+    mysql_user:
+      name: financialForms
+      state: absent
+      host_all: yes
+    when: not PropExists.stat.exists
+
+  - name: drop user encoredb from all hosts - if exists
+    mysql_user:
+      name: encoredb
+      state: absent
+      host_all: yes
+    when: not PropExists.stat.exists
+
+  - name: drop user bi from all hosts - if exists
+    mysql_user:
+      name: encoredb
+      state: absent
+      host_all: yes
+    when: not PropExists.stat.exists
+
+  - name: setup jenkinsuser
+    mysql_user:
+      name: jenkinsuser
+      password: pQJhtR13Jy56Fiqy
+      priv: '*.*:ALL'
+      host: 'jenkins01.live.nva.perdix.co.local'
+      state: present
+
+  - name: setup ruser
+    mysql_user:
+      name: ruser
+      password: pass@123
+      priv: '*.*:SELECT'
+      host: '%'
+      state: present
+
+  - name: setup financialForms user
+    mysql_user:
+      name: financialForms
+      password: '{{ applicationPassword }}'
+      priv: 'financialForms.*:ALL'
+      host: 'localhost'
+      state: present
+    when: not PropExists.stat.exists
+
+  - name: setup bi user
+    mysql_user:
+      name: bi
+      password: '{{ applicationPassword }}'
+      priv: '*.*:ALL'
+      host: 'localhost'
+      state: present
+    when: not PropExists.stat.exists
+
+  - name: setup psychometric user
+    mysql_user:
+      name: psychometric
+      password: '{{ applicationPassword }}'
+      priv: 'psychometric.*:ALL'
+      host: 'localhost'
+      state: present
+    when: not PropExists.stat.exists
+
+  - name: setup encoredb user
+    mysql_user:
+      name: encoredb
+      password: '{{ applicationPassword }}'
+      priv: 'encoredb.*:ALL'
+      host: 'localhost'
+      state: present
+    when: not PropExists.stat.exists
+
+  - name: setup rwuser user
+    mysql_user:
+      name: rwuser
+      password: '{{ rwUserPassword }}'
+      priv: '*.*:SELECT,INSERT,DELETE,UPDATE'
+      host: '%'
+      state: present
+    when: not PropExists.stat.exists
+
+  - name: save database password in password file
+    blockinfile:
+      create: yes
+      path: /database/mysqldata/.perdixcreds.properties
+      marker: '# {mark} app password'
+      mode: 0400
+      block: |
+        APP_PASSWORD={{ applicationPassword }}
+    when: not PropExists.stat.exists
+
+  - name: save rwuser password in password file
+    blockinfile:
+      create: yes
+      path: /database/mysqldata/.perdixcreds.properties
+      marker: '# {mark} rwuser password'
+      mode: 0400
+      block: |
+        RWUSER_PASSWORD={{ rwUserPassword }}
+    when: not PropExists.stat.exists
