@@ -1,0 +1,118 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_method: sudo
+  tasks:
+  - name: update package cache
+    apt:
+      update_cache: yes
+
+  - name: install basic packages
+    apt:
+      name:
+        - ncdu
+        - g++
+        - flex
+        - bison
+        - curl
+        - doxygen
+        - libyajl-dev
+        - libgeoip-dev
+        - libtool
+        - dh-autoreconf
+        - libcurl4-gnutls-dev
+        - libxml2
+        - libpcre++-dev
+        - libxml2-dev
+        - git
+        - build-essential
+        - libpcre3
+        - libpcre3-dev
+        - libssl-dev
+        - autoconf
+        - apache2-dev
+        - libcurl4-openssl-dev
+        - automake
+        - pkgconf
+        - zlib1g-dev
+      state: present
+
+  - name: install zip and xz-utils
+    apt:
+      name:
+        - zip
+        - xz-utils
+      state: present
+
+  - name: add nginx apt key
+    apt_key:
+      url: https://nginx.org/keys/nginx_signing.key
+      state: present
+
+
+  - name: add nginx repository
+    apt_repository: repo='ppa:nginx/stable'
+
+  - name: install nginx
+    apt:
+      name: nginx
+      state: present
+      update_cache: yes
+
+  - name: add php 7 ondrej repository
+    apt_repository: repo='ppa:ondrej/php'
+
+  - name: install php 7.0 packages
+    apt:
+      name:
+        - php7.0-cli
+        - php7.0-fpm
+        - php7.0-dev
+        - php7.0-gd
+        - php7.0-curl
+        - php7.0-opcache
+        - php7.0-mbstring
+        - php7.0-xml
+        - php7.0-json
+        - php7.0-imap
+        - php7.0-mysql
+        - php7.0-zip
+      state: present
+
+  - name: install mysql apt packages
+    apt:
+      deb: http://repo.mysql.com/mysql-apt-config_0.8.9-1_all.deb
+
+  - name: install mysql
+    apt:
+      name: mysql-server
+      allow_unauthenticated: yes
+
+  - name: move mysql secure installation file
+    copy:
+      src: ./templates/mysql/mysql_secure_installation.sql
+      dest: /tmp/mysql_secure_installation.sql
+
+  - name: restart mysql
+    service: name=mysql state=restarted
+
+  - name: install java
+    apt:
+      name: openjdk-8-jdk
+
+  - name: install phpmyadmin
+    apt: name=phpmyadmin state=present
+    ignore_errors: yes
+
+  - name: install pv (pipe viewer)
+    apt: name=pv state=present
+    ignore_errors: yes
+
+  - name: configure site
+    file: src=/usr/share/phpmyadmin/ dest=/app/nginx/phpmyadmin state=link force=yes
+    ignore_errors: yes
+
+  - name: python pip installation
+    easy_install:
+      name: pip
+      state: latest
