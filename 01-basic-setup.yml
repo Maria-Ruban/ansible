@@ -1,0 +1,63 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_method: sudo
+  tasks:
+  - name: create group www-data
+    group:
+      name: www-data
+      state: present
+
+  - name: create user www-data
+    user:
+      name: www-data
+      group: www-data
+      state: present
+      shell: /bin/false
+      create_home: no
+
+  - name: create user tomcat
+    user:
+      name: tomcat
+      group: www-data
+      createhome: no
+      shell: /bin/false
+
+  - name: create group elasticsearch
+    group:
+      name: elasticsearch
+      state: present
+
+  - name: create user elasticsearch
+    user:
+      name: elasticsearch
+      state: present
+      shell: /bin/false
+      system: no
+      createhome: no
+      group: elasticsearch
+
+  - name: create user jenkins
+    user:
+      name: jenkins
+      state: present
+      shell: /bin/bash
+      system: no
+      createhome: yes
+      group: www-data
+
+  - name: setup jenkins ssh key
+    authorized_key:
+      user: jenkins
+      state: present
+      key: "ssh-rsa AAAAB3NzaC1yc2EAAAABJQAAAQEAic1ys1yxhEKQmweqLTMgM0Rp2jcWH/mWpGUaJz1N+3qWVWIw/gNaet4qiOgYpccVe/IZ8oioyjpcizJ6qCQySwZCDy9UzhTsSvtnzSaiKgwBEP2nXya93+gDaz2w5h16ZafSAXQAiKZtXe2WvSt9ZlxqKmLfNWmSlAAbEwEJ0bnhN8wAlAGFg1DbSsPbVvlsx9NF26AGxVr49f+EGSaU0nsqTverjYuOkwrI1WevB7B38bMzqI1lV+7QQNtoKPm5oc4DiuqRhuoLoiMBfUD++yxkekG89Ra13EjUX+p9nKSCo+IhpUI1kplv8lHZBS2GJhTAJJKWiFkyo0EEprMROw=="
+
+  - name: create directories
+    file: path={{item}} state=directory
+    with_items:
+      - /app/nginx
+      - /app/jenkins
+      - /database/mysqldata
+      - /database/mysqltmp
+      - /appdata/perdix
+      - /appdata/encoresite
