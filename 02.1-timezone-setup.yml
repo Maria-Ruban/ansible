@@ -1,0 +1,27 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_method: sudo
+  tasks:
+  - name: update package cache
+    apt:
+      update_cache: yes
+
+  - name: set timezone to Asia/Kolkata
+    timezone:
+      name: Asia/Kolkata
+
+  - name: install chrony
+    apt:
+      name:
+        - chrony
+      state: present
+
+  - name: setup chrony configuration file
+    template: src=./templates/time/chrony.conf dest=/etc/chrony/chrony.conf
+
+  - name: restart chrony
+    systemd:
+      state: restarted
+      daemon_reload: no
+      name: chrony
