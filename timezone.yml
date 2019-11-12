@@ -1,0 +1,7 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_user: root
+  tasks:
+  - name: Set timezone to Asia/Tokyo
+    timezone: name=Asia/Kolkata hwclock=local
