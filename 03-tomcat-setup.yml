@@ -1,0 +1,82 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_user: root
+  tasks:
+  - name: check for existing tomcat
+    stat: path=/app/tomcat
+    register: tomcatExists
+
+  - name: move tomcat zip
+    copy:
+      src: ./templates/tomcat/apache-tomcat-8.5.43.zip
+      dest: /app/
+
+  - name: Extract the ZIP file
+    unarchive: src=/app/apache-tomcat-8.5.43.zip dest=/app/ remote_src=yes
+    when: not tomcatExists.stat.exists
+
+  - name: rename the tomcat folder
+    command: mv /app/apache-tomcat-8.5.43/ /app/tomcat
+    when: not tomcatExists.stat.exists
+
+  - name: setup log4j 
+    copy:
+      src: ./templates/tomcat/log4j
+      dest: /app/tomcat/
+      owner: tomcat
+      group: www-data
+      mode: '0755'
+
+  - name: remove the GIP file
+    file: path={{item}} state=absent
+    with_items:
+      - app/tomcat/webapps/manager
+      - /app/apache-tomcat-8.5.43.zip
+      - /app/tomcat/webapps/host-manager
+      - /app/tomcat/webapps/examples
+      - /app/tomcat/webapps/ROOT
+
+  - name: Change permission of Tomcat folder installation
+    file: dest={{item}}  owner=tomcat group=www-data state=directory recurse=yes
+    with_items: 
+      - /app/tomcat/
+      - /appdata/encoresite/
+      - /appdata/perdix/
+
+  - name: Change owner permission for Tomcat webapps folder
+    file: dest={{item}} owner=jenkins group=www-data state=directory recurse=yes
+    with_items:
+      - /app/tomcat/webapps 
+
+  - name: Change permission for the tomcat script folder
+    file: dest={{item}} mode=0777
+    with_items:
+      - /app/tomcat/bin/shutdown.sh
+      - /app/tomcat/bin/startup.sh
+      - /app/tomcat/bin/catalina.sh
+  
+  - name: Configure tomcat service restart file
+    template: src=./templates/tomcat/tomcat.service dest=/etc/systemd/system/tomcat.service
+  
+  - name: Remove existing tomcat logging file
+    file: 
+      state: absent
+      path: /app/tomcat/conf/logging.properties
+  
+  - name: Copy tomcat configuration files
+    copy: src=templates/tomcat/{{ item }} dest=/app/tomcat/conf/ owner=root mode="0755"
+    with_items:
+      - server.xml
+      - context.xml
+
+  - name: Move setenv.sh
+    copy: src=templates/tomcat/{{ item }} dest=/app/tomcat/bin/ owner=root mode="0755"
+    with_items:
+      - setenv.sh
+  
+  - name: Restart tomcat (with daemon reload)
+    systemd:
+      state: restarted
+      daemon_reload: yes
+      name: tomcat
