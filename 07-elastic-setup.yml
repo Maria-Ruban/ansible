@@ -1,0 +1,61 @@
+---
+- hosts: "{{ target_host | default('nohosts') }}"
+  become: true
+  become_user: root
+  tasks:
+  - name: create elasticdata folder
+    file:
+      path: /database/elasticdata
+      state: directory
+      owner: elasticsearch
+      group: www-data
+
+  - name: check for existing elastic
+    stat: path=/app/elasticsearch
+    register: elasticExists
+
+  - name: download elasticsearch
+    get_url:
+      url: https://download.elastic.co/elasticsearch/release/org/elasticsearch/distribution/zip/elasticsearch/2.4.6/elasticsearch-2.4.6.zip
+      dest: /tmp/elasticsearch.zip
+    when: not elasticExists.stat.exists
+
+  - name: Extract the zip file
+    unarchive: src=/tmp/elasticsearch.zip dest=/app/ remote_src=yes
+    when: not elasticExists.stat.exists
+
+  - name: rename the elasticsearch folder
+    command: mv /app/elasticsearch-2.4.6 /app/elasticsearch
+    when: not elasticExists.stat.exists
+
+  - name: remove the zip file
+    file: path={{item}} state=absent
+    with_items:
+      - /tmp/elasticsearch.zip
+    when: not elasticExists.stat.exists
+
+  - name: check for phonetic plugin exists
+    stat: path=/app/elasticsearch/plugins/analysis-phonetic
+    register: elasticPhoneticPlugin
+
+  - name: install phonetic plugin
+    command: bin/plugin install analysis-phonetic
+    args:
+      chdir: /app/elasticsearch
+    when: not elasticPhoneticPlugin.stat.exists
+
+  - name: Change permission of Elastic folder installation
+    file: dest={{item}} owner=elasticsearch group=www-data state=directory recurse=yes
+    with_items:
+      - /app/elasticsearch/
+      - /database/elasticdata/
+
+  - name: Configure elastic service restart file
+    template: src=./templates/elasticsearch/elasticsearch.service dest=/etc/systemd/system/elasticsearch.service
+
+  - name: Restart elastic (with daemon reload)
+    systemd:
+      state: restarted
+      daemon_reload: yes
+      enabled: yes
+      name: elasticsearch
