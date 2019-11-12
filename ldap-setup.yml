@@ -1,0 +1,52 @@
+---
+- hosts: "{{ target_host }}"
+  become: true
+  vars_prompt:
+  - name: local_address
+    prompt: Provide LDAP local domain name for the server
+    private: no
+
+  - name: ipaclient_principal
+    prompt: Enter LDAP admin username
+    private: no
+
+  - name: ipaclient_password
+    prompt: Enter password for admin user
+    private: yes
+  pre_tasks:
+  - name: Add free ipa local domain to known hosts
+    lineinfile:
+      path: /etc/hosts
+      line: 172.30.1.123 ipa.perdix.co.local
+  
+  - name: Adding LDAP local domain name for server
+    lineinfile:
+      path: /etc/hosts
+      line: 127.0.0.1 {{ local_address }}
+  
+  - name: Updating hostname
+    hostname:
+      name: "{{ local_address }}"
+  
+  - name: create nfshome folder
+    file:
+      path: /nfshome
+      state: directory 
+  
+  - name: install nfs client
+    apt:
+      name: ['nfs-common', 'sssd-tools', 'portmap'] 
+      state: present
+  
+  - name: Do nfs mount on nfshome folder
+    lineinfile:
+      path: /etc/fstab
+      line: 172.30.1.123:/nfshome /nfshome nfs auto,nofail,noatime,nolock,intr,tcp,actimeo=1800 0 0
+
+  vars:
+    freeipaclient_server: "ipa.perdix.co.local"
+    freeipaclient_domain: "ipa.perdix.co.local"
+    freeipaclient_enroll_user: "{{ ipaclient_principal }}"
+    freeipaclient_enroll_pass: "{{ ipaclient_password }}"
+  roles: 
+    - alvaroaleman.freeipa-client
